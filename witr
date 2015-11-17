@@ -1,0 +1,140 @@
+#!/bin/bash
+
+#--------------------------------------------------------------------------
+#
+#                                   ▗▐     
+#                               ▌  ▌▄▜▀ ▙▀▖
+#                               ▐▐▐ ▐▐ ▖▌  
+#                                ▘▘ ▀▘▀ ▘  
+#
+# Description:
+#   Translate a term by looking it up in Wikipedia, through interwiki
+#
+#--------------------------------------------------------------------------
+#
+# Found this useful? Appalling? Appealing? Please let me know.
+# The Unabashed welcomes your impressions. 
+#
+# You will find the
+#   unabashed
+# at the location opposite to
+#   moc • thgimliam
+#
+#--------------------------------------------------------------------------
+#
+# License:
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+#--------------------------------------------------------------------------
+ 
+# Program name from its filename
+prog=${0##*/}
+
+# Some colors
+LIGHTRED='\e[1;31m'
+LIGHTPURPLE='\e[1;35m'
+YELLOW='\e[1;33m'
+NC='\e[0m'  
+
+# Calling for help is the same as calling without arguments.
+case $1 in --help|-[h?])  $prog; exit 1  ;; esac
+
+# Usage if less than three arguments are given
+[[ $# -lt 3 ]] && {
+    clear
+    echo -e "
+${LIGHTRED}Description:${NC}
+    Translate a term by looking it up in Wikipedia, through interwiki.
+
+${LIGHTRED}Usage:${NC}
+    ${YELLOW}$prog [lang_origin] [lang_destination] terms${NC}
+
+${LIGHTRED}Examples:${NC}
+    Try this for Japanese translations:
+    ${YELLOW}$prog en ja Spiderman roller_coaster gnome \"Akira Kurosawa\"${NC}
+    [en] Spiderman         [ja] スパイダーマン
+    [en] roller_coaster    [ja] ローラーコースター
+    [en] gnome             [ja] ノーム (妖精)
+    [en] Akira Kurosawa    [ja] 黒澤明
+
+    Try this for Korean translations:
+    ${YELLOW}$prog en ko Spiderman roller_coaster kimchi Seoul${NC}
+    [en] Spiderman         [ko] 스파이더맨
+    [en] roller_coaster    [ko] 롤러코스터
+    [en] kimchi            [ko] 김치
+    [en] Seoul             [ko] 서울특별시
+
+${LIGHTRED}Dependencies:${NC}
+    Must have curl and xsel installed.
+    Try ${YELLOW}sudo apt-get install curl xsel${NC}
+    "
+    exit 1
+}
+
+#----------------------------------------------------------------------------
+# Check for missing commands
+needed_commands="curl sed xsel"
+
+missing_counter=0
+for needed_command in $needed_commands; do
+    if ! hash "$needed_command" >/dev/null 2>&1; then
+        printf "Command not found in PATH: %s\n" "$needed_command" >&2
+        : $((missing_counter++))
+    fi
+done
+
+if [[ $missing_counter -eq 1 ]]; then
+    printf "At least %d command is missing, install it\n" "$missing_counter" >&2
+    exit 1
+elif [[ $missing_counter -gt 1 ]]; then
+    printf "At least %d commands are missing, install them\n" "$missing_counter" >&2
+    exit 2
+fi
+#----------------------------------------------------------------------------
+
+lang_orig="$1"
+lang_dest="$2"
+shift 2
+
+# Temp files
+mkdir -p $HOME/tmp  &&  
+tmpfile=$(mktemp --tmpdir=$HOME/tmp ${PROG}.XXXXXXXXXX)
+
+while [[ $# -ne 0 ]]
+do
+    term_orig="$1"
+    term_dest=""
+    term_dest=$(\
+        curl -s -L "https://$lang_orig.wikipedia.org/wiki/$term_orig" | 
+            sed 's,/li><li,/li>\n<li,g' |
+            grep 'li class="interlanguage-link interwiki' | 
+            grep "interwiki\-$lang_dest" | 
+            sed 's|.*title="\([^"]*\) –.*|\1|')
+
+    input="[$lang_orig] $term_orig"
+    [[ "$term_dest" == "" ]] &&
+        output="[$lang_dest] * not found *" ||
+        output="[$lang_dest] $term_dest"
+
+    echo "$input = $output" >> $tmpfile
+    shift
+done
+
+<$tmpfile  column -s= -t 
+rm $tmpfile
+
+exit 0
+
+#------------------END of PROGRAM----------------------------
+
